@@ -8,7 +8,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class ListCommand extends Command
 {
-    protected function configure()
+    protected function configure(): void
     {
         $this
             ->setName('list')
@@ -17,7 +17,7 @@ class ListCommand extends Command
         ;
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output)
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $output->writeln([
             '',
@@ -33,5 +33,8 @@ class ListCommand extends Command
             "  <info>list</info>\t\t\t\tLists all commands available",
             '',
         ]);
+
+
+        return Command::SUCCESS;
     }
 }

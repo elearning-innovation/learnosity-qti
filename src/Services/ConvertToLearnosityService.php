@@ -1,11 +1,21 @@
-<?php
+<?php /** @noinspection PhpUnusedPrivateMethodInspection */
+/** @noinspection HttpUrlsUsage */
+/** @noinspection DuplicatedCode */
+/** @noinspection PhpUnused */
+
+/** @noinspection SpellCheckingInspection */
+
 namespace LearnosityQti\Services;
 
+use DOMDocument;
+use DOMNode;
+use DOMXPath;
+use Exception;
 use LearnosityQti\AppContainer;
 use LearnosityQti\Converter;
 use LearnosityQti\Domain\JobDataTrait;
+use LearnosityQti\Exceptions\InvalidQtiException;
 use LearnosityQti\Exceptions\MappingException;
-use LearnosityQti\Services\ItemLayoutService;
 use LearnosityQti\Utils\AssetsFixer;
 use LearnosityQti\Utils\AssumptionHandler;
 use LearnosityQti\Utils\CheckValidQti;
@@ -14,6 +24,7 @@ use LearnosityQti\Utils\General\StringHelper;
 use LearnosityQti\Utils\ResponseProcessingHandler;
 use qtism\data\AssessmentItem;
 use qtism\data\storage\xml\XmlDocument;
+use qtism\data\storage\xml\XmlStorageException;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Finder\SplFileInfo;
@@ -23,45 +34,51 @@ class ConvertToLearnosityService
 {
     use JobDataTrait;
 
-    const RESOURCE_TYPE_ITEM = 'imsqti_item_xmlv2p1';
+    const RESOURCE_TYPE_ITEM_2P1 = 'imsqti_item_xmlv2p1';
+    const RESOURCE_TYPE_ITEM_2P0 = 'imsqti_item_xmlv2p0';
     const RESOURCE_TYPE_PASSAGE = 'webcontent';
     const INFO_OUTPUT_PREFIX = '';
     const CONVERT_LOG_FILENAME = 'convert-to-learnosity.log';
 
-    protected $inputPath;
-    protected $outputPath;
-    protected $output;
-    protected $finalPath;
-    protected $logPath;
-    protected $rawPath;
-    protected $useItemIdentifier;
-    protected $organisationId;
-    protected $isConvertPassageContent;
-    protected $isSingleItemConvert;
+    protected string $inputPath;
+    protected string $outputPath;
+    protected OutputInterface $output;
+    protected string|int $organisationId;
+    protected string $isConvertPassageContent;
+    protected string $isSingleItemConvert = 'N';
 
     /* Runtime options */
-    protected $dryRun                     = false;
-    protected $shouldAppendLogs           = false;
-    protected $shouldGuessItemScoringType = true;
-    protected $shouldUseManifest          = true;
+    protected bool $dryRun                     = false;
+    protected bool $shouldAppendLogs           = false;
+    protected bool $shouldGuessItemScoringType = true;
 
     /* Job-specific configurations */
     // Overrides identifiers to be the same as the filename
 
-    protected $useFileNameAsIdentifier = false;
+    protected bool $useFileNameAsIdentifier = false;
     // Uses the identifier found in learning object metadata if available
-    protected $useMetadataIdentifier = true;
+    protected bool $useMetadataIdentifier = true;
     // Resource identifiers sometimes (but not always) match the assessmentItem identifier, so this can be useful
-    protected $useResourceIdentifier = false;
+    protected bool $useResourceIdentifier = false;
     // Look for the `identifier` attribute within each <assessmentItem>
-    protected $useItemIdentifierAsIdentifier = false;
 
-    protected $assetsFixer;
+    protected AssetsFixer $assetsFixer;
     // Hold the class instance.
     private static $instance = null;
+    private string $finalPath;
+    private string $logPath;
+    private string $rawPath;
+    private mixed $useItemIdentifier;
+    private array $filtering;
 
-    protected function __construct($inputPath, $outputPath, OutputInterface $output, $organisationId, $isConvertPassageContent, $isSingleItemConvert)
-    {
+    protected function __construct(
+        $inputPath,
+        $outputPath,
+        OutputInterface $output,
+        $organisationId,
+        $isConvertPassageContent,
+        $isSingleItemConvert
+    ) {
         $this->inputPath               = $inputPath;
         $this->outputPath              = $outputPath;
         $this->output                  = $output;
@@ -75,11 +92,25 @@ class ConvertToLearnosityService
 
     // The object is created from within the class itself
     // only if the class has no instance.
-    public static function initClass($inputPath, $outputPath, OutputInterface $output, $organisationId, $isConvertPassageContent = 'N', $isSingleItemConvert = 'N')
-    {
+    public static function initClass(
+        $inputPath,
+        $outputPath,
+        OutputInterface $output,
+        $organisationId,
+        $isConvertPassageContent = 'N',
+        $isSingleItemConvert = 'N'
+    ): ?ConvertToLearnosityService {
         if (!self::$instance) {
-            self::$instance = new ConvertToLearnosityService($inputPath, $outputPath, $output, $organisationId, $isConvertPassageContent, $isSingleItemConvert);
+            self::$instance = new ConvertToLearnosityService(
+                $inputPath,
+                $outputPath,
+                $output,
+                $organisationId,
+                $isConvertPassageContent,
+                $isSingleItemConvert,
+            );
         }
+
         return self::$instance;
     }
 
@@ -89,42 +120,42 @@ class ConvertToLearnosityService
         return self::$instance;
     }
 
-    public function getInputPath()
+    public function getInputPath(): string
     {
         return $this->inputPath;
     }
 
-    public function getOrganisationId()
+    public function getOrganisationId(): int|string
     {
         return $this->organisationId;
     }
 
-    public function isUsingMetadataIdentifier()
+    public function isUsingMetadataIdentifier(): bool
     {
         return $this->useMetadataIdentifier;
     }
 
-    public function useMetadataIdentifier($useMetadataIdentifier)
+    public function useMetadataIdentifier($useMetadataIdentifier): void
     {
         $this->useMetadataIdentifier = $useMetadataIdentifier;
     }
 
-    public function isUsingResourceIdentifier()
+    public function isUsingResourceIdentifier(): bool
     {
         return $this->useResourceIdentifier;
     }
 
-    public function useResourceIdentifier($useResourceIdentifier)
+    public function useResourceIdentifier($useResourceIdentifier): void
     {
         $this->useResourceIdentifier = $useResourceIdentifier;
     }
 
-    public function isUsingFileNameAsIdentifier()
+    public function isUsingFileNameAsIdentifier(): bool
     {
         return $this->useFileNameAsIdentifier;
     }
 
-    public function useFileNameAsIdentifier($useFileNameAsIdentifier)
+    public function useFileNameAsIdentifier($useFileNameAsIdentifier): void
     {
         $this->useFileNameAsIdentifier = $useFileNameAsIdentifier;
     }
@@ -134,12 +165,15 @@ class ConvertToLearnosityService
         return $this->useItemIdentifier;
     }
 
-    public function useItemIdentifier($useItemIdentifier)
+    public function useItemIdentifier($useItemIdentifier): void
     {
         $this->useItemIdentifier = $useItemIdentifier;
     }
 
-    public function process()
+    /**
+     * @throws MappingException
+     */
+    public function process(): array
     {
         if ($this->isSingleItemConvert != 'Y' && $this->isSingleItemConvert != 'YES') {
             $errors = $this->validate();
@@ -171,12 +205,14 @@ class ConvertToLearnosityService
             $dirName = $tempDirectoryParts[count($tempDirectoryParts) - 1];
             $assessmentItemContents = file_get_contents($file);
             $metadata['organisation_id'] = $this->organisationId;
-            $convertedContent = $this->convertAssessmentItemInFile($assessmentItemContents, $currentDir, $fileName, static::RESOURCE_TYPE_ITEM, null, $metadata);
+            $convertedContent = $this->convertAssessmentItemInFile($assessmentItemContents, $currentDir, $fileName, static::RESOURCE_TYPE_ITEM_2P1, null, $metadata);
             $scoringRubric = '';
+
             if (isset($convertedContent['rubric'])) {
                 // Check if scoring rubric is present in converted string
                 $rubricReferenceToBeDelete = $this->checkScoringRubricExistInConvertedContent($convertedContent);
                 if (sizeof($rubricReferenceToBeDelete) > 0) {
+                    /** @noinspection PhpUnusedLocalVariableInspection */
                     foreach ($rubricReferenceToBeDelete as $id => $reference) {
                         $index = $this->deleteUnusedRubricFromConvertedContent($convertedContent, $reference);
                         $extraRubricContent = $convertedContent['features'][$index];
@@ -203,7 +239,8 @@ class ConvertToLearnosityService
         } else {
             $this->parseContentPackage();
         }
-        // Convert the item format (columns etc)
+
+        // Convert the item format (columns etc.)
         $ItemLayout = new ItemLayoutService();
         $ItemLayout->execute($this->outputPath . DIRECTORY_SEPARATOR . $this->rawPath . DIRECTORY_SEPARATOR, $this->outputPath . DIRECTORY_SEPARATOR . $this->finalPath, $this->output);
 
@@ -215,8 +252,11 @@ class ConvertToLearnosityService
     /**
      * Performs a conversion on each directory (one level deep)
      * inside the given source directory.
+     *
+     * @throws MappingException
+     * @throws Exception
      */
-    private function parseContentPackage()
+    private function parseContentPackage(): void
     {
         $manifestFolders = $this->parseInputFolders();
 
@@ -227,14 +267,21 @@ class ConvertToLearnosityService
             $dirName = $tempDirectoryParts[count($tempDirectoryParts) - 1];
             $results = $this->convertQtiContentPackagesInDirectory(dirname($dir), $dirName);
             $this->updateJobManifest($finalManifest, $results);
-            $this->persistResultsFile($results, realpath($this->outputPath) . DIRECTORY_SEPARATOR . $this->rawPath . DIRECTORY_SEPARATOR . $dirName);
+            $this->persistResultsFile(
+                $results,
+                realpath($this->outputPath)
+                . DIRECTORY_SEPARATOR
+                . $this->rawPath
+                . DIRECTORY_SEPARATOR
+                . $dirName
+            );
         }
 
         $this->flushJobManifest($finalManifest);
     }
 
     // Traverse the -i option and find all paths with an imsmanifest.xml
-    private function parseInputFolders()
+    private function parseInputFolders(): array
     {
         $folders = [];
 
@@ -251,20 +298,23 @@ class ConvertToLearnosityService
     /**
      * Performs a conversion on QTI content packages found in the given root source directory.
      *
-     * @param  string $sourceDirectory
-     * @param  string $relativeSourceDirectoryPath
+     * @param string $sourceDirectory
+     * @param string $relativeSourceDirectoryPath
      *
      * @return array - the results of the conversion
+     * @throws MappingException
      */
-    private function convertQtiContentPackagesInDirectory($sourceDirectory, $relativeSourceDirectoryPath)
-    {
+    private function convertQtiContentPackagesInDirectory(
+        string $sourceDirectory,
+        string $relativeSourceDirectoryPath
+    ): array {
         $results = [
             'qtiitems' => [],
         ];
 
         $manifestFinder = new Finder();
         $manifestFinderPath = $manifestFinder->files()->in($sourceDirectory)->name('imsmanifest.xml');
-        $totalItemCount = 0;
+
         foreach ($manifestFinderPath as $manifestFile) {
             /** @var SplFileInfo $manifestFile */
             $currentDir = realpath($manifestFile->getPath());
@@ -272,24 +322,30 @@ class ConvertToLearnosityService
             $relativeDir = rtrim($relativeSourceDirectoryPath . '/' . $manifestFile->getRelativePath(), '/');
             $relativePath = rtrim($relativeSourceDirectoryPath . '/' . $manifestFile->getRelativePathname(), '/');
 
-            $this->output->writeln("<info>" . static::INFO_OUTPUT_PREFIX . "Processing manifest file: {$relativePath} </info>");
+            $this->output->writeln(
+                "<info>"
+                . static::INFO_OUTPUT_PREFIX
+                . "Processing manifest file: $relativePath </info>"
+            );
 
             // build the DOMDocument object
-            $manifestDoc = new \DOMDocument();
+            $manifestDoc = new DOMDocument();
 
             $manifestDoc->load($fullFilePath);
 
             $itemResources = $this->getItemResourcesByHrefFromDocument($manifestDoc);
 
-            $itemCount = 0;
             foreach ($itemResources as $resource) {
-                $itemCount++;
-                $totalItemCount++;
                 $resourceHref = $resource['href'];
                 $relatedResource = $resource['resource'];
-                if ($resource['type'] == static::RESOURCE_TYPE_PASSAGE && $this->isConvertPassageContent != 'Y' && $this->isConvertPassageContent != 'YES') {
+
+                if (
+                    $resource['type'] === static::RESOURCE_TYPE_PASSAGE
+                    && $this->isConvertPassageContent != 'Y'
+                    && $this->isConvertPassageContent != 'YES') {
                     continue;
                 }
+
                 $assessmentItemContents = file_get_contents($currentDir . '/' . $resourceHref);
                 $itemReference = $this->getItemReferenceFromResource(
                     $relatedResource,
@@ -303,9 +359,16 @@ class ConvertToLearnosityService
                 // The QTI package requires that `identifier` be on the <assessmentItem> node
                 // Check that it's there, or add it from the location we retrieved it from
                 if (!empty($itemReference)) {
-                    $assessmentItemContents = $this->checkAssessmentItemIdentifier($assessmentItemContents, $itemReference);
+                    $assessmentItemContents = $this->checkAssessmentItemIdentifier(
+                        $assessmentItemContents,
+                        $itemReference,
+                    );
                 } else {
-                    throw new MappingException('Fatal: Cannot find a valid identifier for ' . $resourceHref . '. Perhaps try a different item-reference-source');
+                    throw new MappingException(
+                        'Fatal: Cannot find a valid identifier for '
+                        . $resourceHref
+                        . '. Perhaps try a different item-reference-source'
+                    );
                 }
 
                 $itemTagsArray = $this->getTaxonPathEntryForItemTags($relatedResource);
@@ -318,18 +381,25 @@ class ConvertToLearnosityService
 
                 $metadata['organisation_id'] = $this->organisationId;
 
-                if (isset($itemReference)) {
-                    $this->output->writeln("<comment>Converting assessment item {$itemReference}: $relativeDir/$resourceHref</comment>");
-                } else {
-                    $this->output->writeln("<comment>Converting assessment item {$itemCount}: $relativeDir/$resourceHref</comment>");
-                }
+                $this->output->writeln("<comment>Converting assessment item $itemReference: $relativeDir/$resourceHref</comment>");
 
-                $convertedContent = $this->convertAssessmentItemInFile($assessmentItemContents, $currentDir, $resourceHref, $resource['type'], $itemReference, $metadata, $itemTagsArray);
+                $convertedContent = $this->convertAssessmentItemInFile(
+                    $assessmentItemContents,
+                    $currentDir,
+                    $resourceHref,
+                    $resource['type'],
+                    $itemReference,
+                    $metadata,
+                    $itemTagsArray,
+                );
+
                 $scoringRubric = '';
+
                 if (isset($convertedContent['rubric'])) {
                     // Check if scoring rubric is present in converted string
                     $rubricReferenceToBeDelete = $this->checkScoringRubricExistInConvertedContent($convertedContent);
                     if (sizeof($rubricReferenceToBeDelete) > 0) {
+                        /** @noinspection PhpUnusedLocalVariableInspection */
                         foreach ($rubricReferenceToBeDelete as $id => $reference) {
                             $index = $this->deleteUnusedRubricFromConvertedContent($convertedContent, $reference);
                             $extraRubricContent = $convertedContent['features'][$index];
@@ -357,12 +427,12 @@ class ConvertToLearnosityService
     }
 
     /**
-     * Remove the widget_type , item_reference, content from the converted content
+     * Remove the widget_type , item_reference, content from the converted content.
+     * Return converted content after deleting the data.
      *
-     * @param type $convertedContent converted content
-     * @return type converted content after deleting the data
+     * @param string|array $convertedContent converted content
      */
-    private function removeUnusedDataFromItem($convertedContent)
+    private function removeUnusedDataFromItem(string|array $convertedContent): array|string
     {
         if (is_array($convertedContent) && array_key_exists('questions', $convertedContent)) {
             foreach ($convertedContent['questions'] as $id => $data) {
@@ -380,17 +450,18 @@ class ConvertToLearnosityService
                 }
             }
         }
+
         return $this->removeUnusedFeatureData($convertedContent);
     }
 
     /**
      * Removes the widget_type, item_reference and content
      * from the feature array as these are no longer needed
+     * return converted content after deleting
      *
-     * @param type $convertedContent converted content
-     * @return type return converted content after deleting
+     * @param array|string $convertedContent converted content
      */
-    private function removeUnusedFeatureData($convertedContent)
+    private function removeUnusedFeatureData(array|string $convertedContent): array|string
     {
         if (is_array($convertedContent) && array_key_exists('features', $convertedContent)) {
             foreach ($convertedContent['features'] as $id => $data) {
@@ -405,18 +476,22 @@ class ConvertToLearnosityService
                 }
             }
         }
+
         return $convertedContent;
     }
 
     /**
      * Create a new item with only a shared passage
      *
-     * @param type $scoringRubric rubric needs to be attached with the item
-     * @param type $reference reference of the rubric
-     * @return type array
+     * @param array $scoringRubric rubric needs to be attached with the item
+     * @param int|string $reference reference of the rubric
+     *
+     * @return array array
      */
-    private function createNewScoringRubricItem($scoringRubric, $reference)
-    {
+    private function createNewScoringRubricItem(
+        array $scoringRubric,
+        int|string $reference
+    ): array {
         $itemData['reference'] = $reference;
         $itemData['status'] = 'published';
         $itemData['questions'] = array();
@@ -435,13 +510,14 @@ class ConvertToLearnosityService
     /**
      * Check if a scoring rubric exist based on the rubric view
      *
-     * @param type $rubricArray rubric array
-     * @return type reference of the deleted rubric
+     * @param array $rubricArray rubric array
+     * @return array reference of the deleted rubric
      */
-    private function checkScoringRubricExistInConvertedContent($rubricArray)
+    private function checkScoringRubricExistInConvertedContent(array $rubricArray): array
     {
         $rubricReferenceToBeDelete = array();
         if (isset($rubricArray['rubric']['features'])) {
+            /** @noinspection PhpUnusedLocalVariableInspection */
             foreach ($rubricArray['rubric']['features'] as $id => $value) {
                 if ($value['view'] == 3) {
                     $rubricReferenceToBeDelete[] = $value['reference'];
@@ -454,18 +530,22 @@ class ConvertToLearnosityService
     /**
      * Delete the scoring rubric from converted content
      *
-     * @param type $convertedContent converted content
-     * @param type $reference reference of the rubric
-     * @return type index of the rubric to be deleted
+     * @param array $convertedContent converted content
+     * @param int|string $reference reference of the rubric
+     *
+     * @return int|string index of the rubric to be deleted
      */
-    private function deleteUnusedRubricFromConvertedContent($convertedContent, $reference)
-    {
+    private function deleteUnusedRubricFromConvertedContent(
+        array $convertedContent,
+        int|string $reference
+    ): int|string {
         $index = '';
         foreach ($convertedContent['features'] as $id => $featureContent) {
             if ($featureContent['reference'] == $reference) {
                 $index = $id;
             }
         }
+
         return $index;
     }
 
@@ -476,8 +556,9 @@ class ConvertToLearnosityService
      * @param  DOMDocument $manifestDoc - the document to search
      *
      * @return array
+     * @noinspection PhpPossiblePolymorphicInvocationInspection
      */
-    private function getItemResourcesByHrefFromDocument(\DOMDocument $manifestDoc)
+    private function getItemResourcesByHrefFromDocument(DOMDocument $manifestDoc): array
     {
         $itemResources = [];
         $resources = $manifestDoc->getElementsByTagName('resource');
@@ -486,7 +567,7 @@ class ConvertToLearnosityService
             $resourceHref = $resource->getAttribute('href');
             $resourceType = $resource->getAttribute('type');
 
-            if ($resourceType === static::RESOURCE_TYPE_ITEM) {
+            if ($resourceType === static::RESOURCE_TYPE_ITEM_2P1|| $resourceType === static::RESOURCE_TYPE_ITEM_2P0) {
                 $itemResources[] = [
                     'href' => $resourceHref,
                     'resource' => $resource,
@@ -512,11 +593,11 @@ class ConvertToLearnosityService
      * Gets the general identifier for this resource from its Learning Object Metadata
      * component, if it exists.
      *
-     * @param  DOMNode $resource
+     * @param DOMNode $resource
      *
      * @return string|null - the identifier
      */
-    private function getIdentifierFromResourceMetadata(\DOMNode $resource)
+    private function getIdentifierFromResourceMetadata(DOMNode $resource): ?string
     {
         $identifier = null;
 
@@ -548,12 +629,13 @@ class ConvertToLearnosityService
      *
      * @return boolean
      */
-    private function metadataIdentifierExists(\DOMNode $resource)
+    private function metadataIdentifierExists(DOMNode $resource): bool
     {
-        $xpath = new \DOMXPath($resource->ownerDocument);
+        $xpath = new DOMXPath($resource->ownerDocument);
         $xpath->registerNamespace('lom', 'http://ltsc.ieee.org/xsd/LOM');
         $xpath->registerNamespace('qti', 'http://www.imsglobal.org/xsd/imscp_v1p1');
         $searchResult = $xpath->query('.//qti:metadata/lom:lom/lom:general/lom:identifier', $resource);
+
         return $searchResult->length > 0;
     }
 
@@ -565,9 +647,9 @@ class ConvertToLearnosityService
      *
      * @return array
      */
-    private function getTaxonPathEntryForItemTags(\DOMNode $resource)
+    private function getTaxonPathEntryForItemTags(DOMNode $resource): array
     {
-        $xpath = new \DOMXPath($resource->ownerDocument);
+        $xpath = new DOMXPath($resource->ownerDocument);
         $xpath->registerNamespace('lom', 'http://ltsc.ieee.org/xsd/LOM');
         $xpath->registerNamespace('qti', 'http://www.imsglobal.org/xsd/imscp_v1p1');
 
@@ -581,34 +663,51 @@ class ConvertToLearnosityService
                 $itemTagsArray[rtrim($tagName)] = $tagValuesArray;
             }
         }
+
         return $itemTagsArray;
     }
 
     /**
      * Converts a single <assessmentItem> file.
      *
-     * @param  SplFileInfo $file
-     * @param  string $itemReference - Optional
+     * @param $contents
+     * @param $currentDir
+     * @param $resourceHref
+     * @param $resourceType
+     * @param null $itemReference - Optional
+     * @param array $metadata
+     * @param array $itemTagsArray
      *
-     * @return array - the results of the conversion
-    */
-    protected function convertAssessmentItemInFile($contents, $currentDir, $resourceHref, $resourceType, $itemReference = null, array $metadata = [], $itemTagsArray = [])
-    {
-        $results = null;
-
+     * @return array|null - the results of the conversion
+     */
+    protected function convertAssessmentItemInFile(
+        $contents,
+        $currentDir,
+        $resourceHref,
+        $resourceType,
+        $itemReference = null,
+        array $metadata = [],
+        array $itemTagsArray = [],
+    ): ?array {
         try {
             $xmlString = $contents;
 
             // Check that we're on an <assessmentItem>
-            if ($resourceType == static::RESOURCE_TYPE_ITEM && !CheckValidQti::isAssessmentItem($xmlString)) {
-                $this->output->writeln("<info>" . static::INFO_OUTPUT_PREFIX . "Not an <assessmentItem>, moving on...</info>");
-                return $results;
-            }
+//            if (
+//                (
+//                    $resourceType === static::RESOURCE_TYPE_ITEM_2P1 ||
+//                    $resourceType === static::RESOURCE_TYPE_ITEM_2P0
+//                )
+//                && !CheckValidQti::isAssessmentItem($xmlString)
+//            ) {
+//                $this->output->writeln("<info>" . static::INFO_OUTPUT_PREFIX . "Not an <assessmentItem>, moving on...</info>");
+//                return null;
+//            }
 
             $resourcePath = $currentDir . '/' . $resourceHref;
 
             $results = $this->convertAssessmentItem($xmlString, $resourceType, $itemReference, $resourcePath, $metadata, $itemTagsArray);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $targetFilename = $resourceHref;
             $message = $e->getMessage();
             $results = ['exception' => $targetFilename . '-' . $message];
@@ -623,21 +722,33 @@ class ConvertToLearnosityService
     /**
      * Converts a single <assessmentItem> XML string.
      *
-     * @param  string $xmlString
-     * @param  string $itemReference - Optional
-     * @param  string $resourcePath  - Optional
+     * @param string $xmlString
+     * @param $resourceType
+     * @param string|null $itemReference - Optional
+     * @param string|null $resourcePath - Optional
+     * @param array $metadata
+     * @param array $itemTagsArray
      *
      * @return array - the results of the conversion
      *
-     * @throws \Exception - if the conversion fails
+     * @throws MappingException
+     * @throws InvalidQtiException
+     * @throws XmlStorageException
+     * @throws Exception
      */
-    private function convertAssessmentItem($xmlString, $resourceType, $itemReference = null, $resourcePath = null, array $metadata = [], array $itemTagsArray = [])
-    {
+    private function convertAssessmentItem(
+        string $xmlString,
+        $resourceType,
+        string $itemReference = null,
+        string $resourcePath = null,
+        array $metadata = [],
+        array $itemTagsArray = []
+    ): array {
         AssumptionHandler::flush();
         $xmlString = CheckValidQti::preProcessing($xmlString);
 
-        if ($resourceType == static::RESOURCE_TYPE_ITEM) {
-            $result = Converter::convertQtiItemToLearnosity($xmlString, null, true, $resourcePath, $itemReference, $metadata);
+        if ($resourceType === static::RESOURCE_TYPE_ITEM_2P1 || $resourceType === static::RESOURCE_TYPE_ITEM_2P0) {
+            $result = Converter::convertQtiItemToLearnosity($xmlString, null, false, $resourcePath, $itemReference, $metadata);
         } elseif ($resourceType == static::RESOURCE_TYPE_PASSAGE && ($this->isConvertPassageContent == 'Y' || $this->isConvertPassageContent == 'YES')) {
             $result = Converter::convertPassageItemToLearnosity($xmlString, null, true, $resourcePath, $itemReference, $metadata);
         }
@@ -653,7 +764,7 @@ class ConvertToLearnosityService
         // Return those results!
         list($item, $questions) = CheckValidQti::postProcessing($item, $questions, []);
 
-        if ($this->shouldGuessItemScoringType && $resourceType == static::RESOURCE_TYPE_ITEM) {
+        if ($this->shouldGuessItemScoringType && ($resourceType === static::RESOURCE_TYPE_ITEM_2P1 || $resourceType === static::RESOURCE_TYPE_ITEM_2P0)) {
             list($assumedItemScoringType, $scoringTypeManifest) = $this->getItemScoringTypeFromResponseProcessing($xmlString);
             if (isset($assumedItemScoringType)) {
                 $item['metadata']['scoring_type'] = $assumedItemScoringType;
@@ -686,21 +797,24 @@ class ConvertToLearnosityService
      * As such, if {$useFileNameAsIdentifier} is enabled, it takes precedence
      * over any other flags set before it.
      *
-     * @param  DOMNode $resource
-     * @param  boolean $useMetadataIdentifier   - Optional. true by default; set false to disable
-     * @param  boolean $useResourceIdentifier   - Optional
-     * @param  boolean $useFileNameAsIdentifier - Optional
+     * @param DOMNode $resource
+     * @param $assessmentItemContents
+     * @param boolean $useMetadataIdentifier - Optional. true by default; set false to disable
+     * @param boolean $useResourceIdentifier - Optional
+     * @param boolean $useFileNameAsIdentifier - Optional
+     * @param bool $useItemIdentifier
      *
      * @return string|null
+     * @noinspection PhpPossiblePolymorphicInvocationInspection
      */
     private function getItemReferenceFromResource(
-        \DOMNode $resource,
+        DOMNode $resource,
         $assessmentItemContents,
-        $useMetadataIdentifier = true,
-        $useResourceIdentifier = false,
-        $useFileNameAsIdentifier = false,
-        $useItemIdentifier = false
-    ) {
+        bool $useMetadataIdentifier = true,
+        bool $useResourceIdentifier = false,
+        bool $useFileNameAsIdentifier = false,
+        bool $useItemIdentifier = false
+    ): ?string {
         $itemReference = null;
 
         if ($useMetadataIdentifier && $this->metadataIdentifierExists($resource)) {
@@ -727,13 +841,17 @@ class ConvertToLearnosityService
 
     /**
      * Takes the resource href and extracts the file name out of it.
-     * @example items/My-File.xml will return My-File
      *
      * @param string $resourceHref
+     * @param string $suffix
+     *
      * @return string
+     * @example items/My-File.xml will return My-File
      */
-    private function getIdentifierFromResourceHref($resourceHref, $suffix = '.xml')
-    {
+    private function getIdentifierFromResourceHref(
+        string $resourceHref,
+        string $suffix = '.xml',
+    ): string {
         return basename($resourceHref, $suffix);
     }
 
@@ -742,14 +860,15 @@ class ConvertToLearnosityService
      * If there is, return that as the item reference (identifier)
      *
      * @param string $xmlString
-     * @return string
+     *
+     * @return string|null
      */
-    private function getIdentifierFromAssessmentItem($xmlString)
+    private function getIdentifierFromAssessmentItem(string $xmlString): ?string
     {
-        $document = new \DOMDocument();
+        $document = new DOMDocument();
         $document->loadXML($xmlString);
         $elAssessmentItem = $document->getElementsByTagName('assessmentItem');
-        $identifer = null;
+        $identifier = null;
 
         // Find the <assessmentItem> element
         foreach ($elAssessmentItem as $node) {
@@ -758,15 +877,14 @@ class ConvertToLearnosityService
                 foreach ($node->attributes as $attribute) {
                     if ($attribute->name === 'identifier') {
                         if (!empty($attribute->value)) {
-                            $identifer = $attribute->value;
+                            $identifier = $attribute->value;
                         }
-                        continue;
                     }
                 }
             }
         }
 
-        return $identifer;
+        return $identifier;
     }
 
     /**
@@ -775,11 +893,14 @@ class ConvertToLearnosityService
      *
      * @param string $xmlString
      * @param string $itemReference
+     *
      * @return string
      */
-    private function checkAssessmentItemIdentifier($xmlString, $itemReference)
-    {
-        $document = new \DOMDocument();
+    private function checkAssessmentItemIdentifier(
+        string $xmlString,
+        string $itemReference,
+    ): string {
+        $document = new DOMDocument();
         $document->loadXML($xmlString);
         $elAssessmentItem = $document->getElementsByTagName('assessmentItem');
         $foundIdentifer = false;
@@ -788,12 +909,10 @@ class ConvertToLearnosityService
         foreach ($elAssessmentItem as $node) {
             // Iterate over each attribute and check for the `identifier` attribute
             foreach ($node->attributes as $attribute) {
-                if ($attribute->name === 'identifer') {
-                    $foundIdentifer = true;
+                if ($attribute->name === 'identifier') {
                     if (empty($attribute->value)) {
                         $attribute->value = $itemReference;
                     }
-                    exit;
                 }
             }
             // We didn't find an `identifier` attribute, add one manually
@@ -809,14 +928,21 @@ class ConvertToLearnosityService
      * Tries to determine item scoring information based on response
      * processing rules in the given XML string.
      *
-     * @param  string $xmlString
+     * @param string $xmlString
      *
-     * @return <string, array> - the item scoring type if found as the first arg;
-     *                         the list of log messages as the second arg
+     * @return string|array The item scoring type if found as the first arg;
+     *                         The list of log messages as the second arg.
+     * @throws XmlStorageException
+     * @throws MappingException
+     * @throws Exception
      */
-    private function getItemScoringTypeFromResponseProcessing($xmlString)
-    {
-        $xmlString = AppContainer::getApplicationContainer()->get('xml_assessment_items_processing')->processXml($xmlString);
+    private function getItemScoringTypeFromResponseProcessing(
+        string $xmlString
+    ): string|array {
+        $xmlString = AppContainer::getApplicationContainer()
+            ->get('xml_assessment_items_processing')
+            ->processXml($xmlString);
+
         $xmlDocument = new XmlDocument();
         $xmlDocument->loadFromString($xmlString);
         // $xmlDocument->getDomDocument()->documentURI = $file->getPathname();
@@ -829,6 +955,7 @@ class ConvertToLearnosityService
         }
 
         // Handle response processing
+        /** @noinspection PhpUnusedLocalVariableInspection */
         list($responseProcessing, $assumedItemScoringType, $messages) = ResponseProcessingHandler::handle($assessmentItem, $xmlString);
         if (empty($messages)) {
             $messages = [];
@@ -837,7 +964,7 @@ class ConvertToLearnosityService
         return [$assumedItemScoringType, $messages];
     }
 
-    private function getPointValueFromResource(\DOMNode $resource)
+    private function getPointValueFromResource(DOMNode $resource): ?int
     {
         $pointValue = null;
 
@@ -850,9 +977,9 @@ class ConvertToLearnosityService
         return $pointValue;
     }
 
-    private function getXPathForQtiDocument(\DOMDocument $document)
+    private function getXPathForQtiDocument(DOMDocument $document): DOMXPath
     {
-        $xpath = new \DOMXPath($document);
+        $xpath = new DOMXPath($document);
         $xpath->registerNamespace('lom', 'http://ltsc.ieee.org/xsd/LOM');
         $xpath->registerNamespace('qti', 'http://www.imsglobal.org/xsd/imscp_v1p1');
 
@@ -864,12 +991,14 @@ class ConvertToLearnosityService
      * specified filtering rules applied.
      *
      * @param  Finder $finder
-     * @param  array  $filtering
+     * @param array|null $filtering
      *
      * @return Finder
      */
-    private function applyFilteringToFinder(Finder $finder, $filtering = null)
-    {
+    private function applyFilteringToFinder(
+        Finder $finder,
+        array $filtering = null
+    ): Finder {
         if (!isset($filtering)) {
             $filtering = $this->filtering;
         }
@@ -888,8 +1017,10 @@ class ConvertToLearnosityService
      * Flush and write the given job manifest.
      *
      * @param array $manifest
+     *
+     * @throws Exception
      */
-    private function flushJobManifest(array $manifest)
+    private function flushJobManifest(array $manifest): void
     {
         if ($this->dryRun) {
             return;
@@ -918,7 +1049,7 @@ class ConvertToLearnosityService
      *
      * @return array
      */
-    private function getJobManifestTemplate()
+    private function getJobManifestTemplate(): array
     {
         return [
             'info' => [
@@ -937,12 +1068,22 @@ class ConvertToLearnosityService
      * @param array  $results
      * @param string $outputFilePath
      */
-    private function persistResultsFile(array $results, $outputFilePath)
-    {
+    private function persistResultsFile(
+        array $results,
+        string $outputFilePath
+    ): void {
         if ($this->dryRun) {
             return;
         }
-        $this->output->writeln('<info>' . static::INFO_OUTPUT_PREFIX . "Writing conversion results: " . $outputFilePath . '.json' . "</info>");
+        $this->output->writeln(
+            '<info>'
+            . static::INFO_OUTPUT_PREFIX
+            . "Writing conversion results: "
+            . $outputFilePath
+            . '.json'
+            . "</info>"
+        );
+
         $innerPath = explode('/', $outputFilePath);
         array_pop($innerPath);
         file_put_contents($outputFilePath . '.json', json_encode($results));
@@ -955,13 +1096,13 @@ class ConvertToLearnosityService
      * @param array $manifest - the job manifest to update
      * @param array $results  - the partial job result object to read
      */
-    private function updateJobManifest(array &$manifest, array $results)
+    private function updateJobManifest(array &$manifest, array $results): void
     {
         if (empty($results['qtiitems'])) {
             return;
         }
 
-        foreach ($results['qtiitems'] as &$itemResult) {
+        foreach ($results['qtiitems'] as $itemResult) {
             // Log ignored items
             if (!isset($itemResult['item'])) {
                 $manifest['ignored_items'][] = $itemResult['exception'];
@@ -986,7 +1127,7 @@ class ConvertToLearnosityService
                 }
                 ++$manifest['info']['item_scoring_types_counts'][$itemResult['item']['metadata']['scoring_type']];
             }
-            foreach ($itemResult['questions'] as &$question) {
+            foreach ($itemResult['questions'] as $question) {
                 // Log question types
                 $manifest['info']['question_types'][] = $question['type'];
             }
@@ -1001,20 +1142,26 @@ class ConvertToLearnosityService
     {
     }
 
-    public function showWarnings($message)
+    public function showWarnings($message): void
     {
         $this->output->writeln("<info>" . static::INFO_OUTPUT_PREFIX .$message." </info>");
     }
 
-    private function validate()
+    private function validate(): array
     {
         $errors = [];
         $manifestFolders = $this->parseInputFolders();
 
         if (empty($manifestFolders)) {
-            array_push($errors, 'No manifest(s) found in ' . $this->inputPath);
+            $errors[] = 'No manifest(s) found in ' . $this->inputPath;
         }
 
         return $errors;
+    }
+
+    private function containsPath(SplFileInfo $file, array $filtering): bool
+    {
+        // This method was referred to in the legacy l8y code but didn't exist.
+        return true;
     }
 }
