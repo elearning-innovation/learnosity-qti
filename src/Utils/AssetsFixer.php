@@ -9,17 +9,11 @@ use LearnositySdk\Utils\Json;
 class AssetsFixer
 {
     private array $urlMap = [];
-    private $organisationId;
-
-    public function __construct($organisationId)
-    {
-        $this->organisationId = $organisationId;
-    }
 
     /**
      * @throws Exception
      */
-    public function fix(array $array)
+    public function fix(array $array, int $organisationId): array
     {
         $encodedArray = Json::encode($array);
         // Replace HTML Urls
@@ -33,7 +27,7 @@ class AssetsFixer
                     : basename($url);
 
                 $replacement = 'https://assets.learnosity.com/organisations/'
-                    . $this->organisationId
+                    . $organisationId
                     . '/'
                     . $filename;
 
@@ -44,9 +38,9 @@ class AssetsFixer
 
         // Replace non-HTML Urls, ie. data['image']['src']
         // TODO actually support things like data['image']['src'] in the conversion lib
-        $encodedArray = str_replace('"assets/', '"https://assets.learnosity.com/organisations/' . $this->organisationId . '/', $encodedArray, $count1);
-        $encodedArray = str_replace('"../images/', '"https://assets.learnosity.com/organisations/' . $this->organisationId . '/', $encodedArray, $count1);
-        $encodedArray = str_replace('"../Content/Images/', '"https://assets.learnosity.com/organisations/' . $this->organisationId . '/', $encodedArray, $count1);
+        $encodedArray = str_replace('"assets/', '"https://assets.learnosity.com/organisations/' . $organisationId . '/', $encodedArray, $count1);
+        $encodedArray = str_replace('"../images/', '"https://assets.learnosity.com/organisations/' . $organisationId . '/', $encodedArray, $count1);
+        $encodedArray = str_replace('"../Content/Images/', '"https://assets.learnosity.com/organisations/' . $organisationId . '/', $encodedArray, $count1);
         $encodedArray = str_replace('.svgz"', '.svg"', $encodedArray);
 
         // TODO: This is a hack because those audio/video files are not enclosed in proper folders
