@@ -22,6 +22,7 @@ use LearnosityQti\Utils\ResponseProcessingHandler;
 use qtism\data\AssessmentItem;
 use qtism\data\storage\xml\XmlDocument;
 use qtism\data\storage\xml\XmlStorageException;
+use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Finder\SplFileInfo;
@@ -36,9 +37,9 @@ final class ConvertToLearnosityService
     private const RESOURCE_TYPE_PASSAGE = 'webcontent';
     private const INFO_OUTPUT_PREFIX = '';
     private const CONVERT_LOG_FILENAME = 'convert-to-learnosity.log';
-    private const PATH_FINAL = 'final';
-    private const PATH_LOG   = 'log';
-    private const PATH_RAW   = 'raw';
+    public const PATH_FINAL = 'final';
+    public const PATH_LOG   = 'log';
+    public const PATH_RAW   = 'raw';
     private const IMS_MANIFEST = 'imsmanifest.xml';
 
     private string $inputPath;
@@ -75,7 +76,7 @@ final class ConvertToLearnosityService
     public function convert(
         string $inputPath,
         string $outputPath,
-        OutputInterface $output,
+        ?OutputInterface $output,
         int $organisationId,
         bool $isConvertPassageContent,
         bool $isSingleItemConvert,
@@ -87,7 +88,7 @@ final class ConvertToLearnosityService
     {
         $this->inputPath               = $inputPath;
         $this->outputPath              = $outputPath;
-        $this->output                  = $output;
+        $this->output                  = $output ?? new NullOutput();
         $this->organisationId          = $organisationId;
         $this->isConvertPassageContent = $isConvertPassageContent;
         $this->useMetadataIdentifier   = $useMetadataIdentifier;
@@ -201,7 +202,7 @@ final class ConvertToLearnosityService
             $outputPath
                 . DIRECTORY_SEPARATOR
                 . self::PATH_FINAL,
-            $output,
+            $this->output,
         );
 
         return [
