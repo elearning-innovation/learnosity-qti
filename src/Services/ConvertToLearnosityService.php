@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LearnosityQti\Services;
 
 use DOMDocument;

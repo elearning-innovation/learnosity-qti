@@ -1,30 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LearnosityQti\Utils;
 
-use LearnosityQti\Utils\General\HtmlHelper;
 use LearnosityQti\Utils\General\StringHelper;
 
 class CheckValidQti
 {
-    public static function isSharedPassage($xmlString)
-    {
-        return (new General\HtmlHelper)->hasElementWithAttribute($xmlString, 'rubricBlock', 'use', 'sharedstimulus');
-    }
-
-    public static function isAssessmentItem($xmlString)
-    {
-        return HtmlHelper::hasElement($xmlString, 'assessmentItem');
-    }
-
-    public static function isAssessmentSection($xmlString)
-    {
-        return HtmlHelper::hasElement($xmlString, 'assessmentSection');
-    }
-
     // Preprocess XML string here
-    public static function preProcessing($xmlString)
-    {
+    public static function preProcessing($xmlString): string {
         // TODO: Hack custom operator, replace it with ours so we can intercept it
         // $xmlString = str_replace('qti.customOperators.text.StringToNumber', 'Learnosity.Jobs.Common.QtiImport.Paarc.Utils.CustomQti.StringToNumberOperator', $xmlString);
         // $xmlString = str_replace('qti.customOperators.text.stringToNumber', 'Learnosity.Jobs.Common.QtiImport.Paarc.Utils.CustomQti.StringToNumberOperator', $xmlString);
