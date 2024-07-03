@@ -1,8 +1,9 @@
-<?php /** @noinspection PhpUnusedPrivateMethodInspection */
+<?php
+
+/** @noinspection PhpUnusedPrivateMethodInspection */
 /** @noinspection HttpUrlsUsage */
 /** @noinspection DuplicatedCode */
 /** @noinspection PhpUnused */
-
 /** @noinspection SpellCheckingInspection */
 
 namespace LearnosityQti\Services;
@@ -71,7 +72,7 @@ class ConvertToLearnosityService
     private mixed $useItemIdentifier;
     private array $filtering;
 
-    protected function __construct(
+    public function __construct(
         $inputPath,
         $outputPath,
         OutputInterface $output,
