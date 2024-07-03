@@ -145,10 +145,9 @@ class ConvertToLearnosityCommand extends Command
             return Command::FAILURE;
         } else {
             /**
-             * @var array $identifierOptions useMetadataIdentifier,
-             *                               useResourceIdentifier,
-             *                               useFileNameAsIdentifier,
-             *                               useItemIdentifier.
+             * @var array{bool, bool, bool, bool} $identifierOptions
+             *      useMetadataIdentifier, useResourceIdentifier,
+             *      useFileNameAsIdentifier, useItemIdentifier
              */
             $identifierOptions = match ($itemReferenceSource) {
                 'item'     => [false, false, false, true],
