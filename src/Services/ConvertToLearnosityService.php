@@ -117,7 +117,7 @@ final class ConvertToLearnosityService
         FileSystemHelper::createDirIfNotExists($outputPath . DIRECTORY_SEPARATOR . self::PATH_RAW);
 
         if ($isSingleItemConvert) {
-            $resultSingleFile = array();
+            $resultSingleFile = [];
             $inputXmlFile = new File($inputPath);
             $fileName = $inputXmlFile->getFileName();
             $currentDir = realpath($inputXmlFile->getPath());
@@ -507,18 +507,18 @@ final class ConvertToLearnosityService
         array $scoringRubric,
         int|string $reference
     ): array {
-        $itemData['reference'] = $reference;
-        $itemData['status'] = 'published';
-        $itemData['questions'] = array();
-        $itemData['definition']['template'] = 'dynamic';
+        $itemData['reference']                            = $reference;
+        $itemData['status']                               = 'published';
+        $itemData['questions']                            = [];
+        $itemData['definition']['template']               = 'dynamic';
         $itemData['definition']['widgets'][]['reference'] = $scoringRubric['reference'];
-        $itemData['features'][]['reference'] = $scoringRubric['reference'];
-        $featuresData = array($scoringRubric);
+        $itemData['features'][]['reference']              = $scoringRubric['reference'];
+        $featuresData = [$scoringRubric];
 
         return [
-            'item' => $itemData,
-            'features' => $featuresData,
-            'questions' => array(),
+            'item'      => $itemData,
+            'features'  => $featuresData,
+            'questions' => [],
         ];
     }
 
@@ -531,15 +531,16 @@ final class ConvertToLearnosityService
     private function checkScoringRubricExistInConvertedContent(
         array $rubricArray,
     ): array {
-        $rubricReferenceToBeDelete = array();
+        $rubricReferenceToBeDelete = [];
+
         if (isset($rubricArray['rubric']['features'])) {
-            /** @noinspection PhpUnusedLocalVariableInspection */
-            foreach ($rubricArray['rubric']['features'] as $id => $value) {
+            foreach ($rubricArray['rubric']['features'] as $value) {
                 if ($value['view'] == 3) {
                     $rubricReferenceToBeDelete[] = $value['reference'];
                 }
             }
         }
+
         return $rubricReferenceToBeDelete;
     }
 
@@ -578,9 +579,9 @@ final class ConvertToLearnosityService
         DOMDocument $manifestDoc,
     ): array {
         $itemResources = [];
-        $resources = $manifestDoc->getElementsByTagName('resource');
+        $resources     = $manifestDoc->getElementsByTagName('resource');
 
-        while (($resource = $resources->item(0)) != null) {
+        while (($resource = $resources->item(0)) !== null) {
             $resourceHref = $resource->getAttribute('href');
             $resourceType = $resource->getAttribute('type');
 
@@ -625,6 +626,7 @@ final class ConvertToLearnosityService
         $xpath = $this->getXPathForQtiDocument($resource->ownerDocument);
 
         $lomIdentifier = null;
+
         $searchResult = $xpath->query(
             './/qti:metadata/lom:lom/lom:general/lom:identifier',
             $resource,
@@ -691,8 +693,9 @@ final class ConvertToLearnosityService
             'http://www.imsglobal.org/xsd/imscp_v1p1'
         );
 
-        $searchResult = $xpath->query('.//lom:taxonPath', $resource);
-        $itemTagsArray = array();
+        $searchResult  = $xpath->query('.//lom:taxonPath', $resource);
+        $itemTagsArray = [];
+
         foreach ($searchResult as $search) {
             $tagName = $xpath->query(
                 './/lom:source/lom:string',
@@ -830,13 +833,13 @@ final class ConvertToLearnosityService
             );
         }
 
-        $item       = !empty($result['item']) ? $result['item'] : array();
-        $questions  = !empty($result['questions']) ? $result['questions'] : array();
-        $features   = !empty($result['features']) ? $result['features'] : array();
-        $manifest   = !empty($result['messages']) ? $result['messages'] : array();
-        $rubricItem = !empty($result['rubric']) ? $result['rubric'] : null;
-        $questions  = !empty($questions) ? $this->assetsFixer->fix($questions, $this->organisationId) : array();
-        $features   = !empty($features) ? $this->assetsFixer->fix($features, $this->organisationId) : array();
+        $item       = ! empty($result['item']) ? $result['item'] : [];
+        $questions  = ! empty($result['questions']) ? $result['questions'] : [];
+        $features   = ! empty($result['features']) ? $result['features'] : [];
+        $manifest   = ! empty($result['messages']) ? $result['messages'] : [];
+        $rubricItem = ! empty($result['rubric']) ? $result['rubric'] : null;
+        $questions  = ! empty($questions) ? $this->assetsFixer->fix($questions, $this->organisationId) : [];
+        $features   = ! empty($features) ? $this->assetsFixer->fix($features, $this->organisationId) : [];
 
         // Return those results!
         [$item, $questions] = CheckValidQti::postProcessing(
@@ -861,6 +864,7 @@ final class ConvertToLearnosityService
             $manifest = array_merge($manifest, $scoringTypeManifest);
         }
         $item['tags'] = $itemTagsArray;
+
         return [
             'item'        => $item,
             'questions'   => $questions,
