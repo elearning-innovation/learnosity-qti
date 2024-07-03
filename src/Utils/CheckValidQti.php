@@ -63,7 +63,6 @@ class CheckValidQti
     public static function postProcessing(
         $item,
         array $questions,
-        $itemTags,
         $convertClozeTextToClozeFormula = null
     ): array {
         // Convert `clozetext` to `clozeformula`

@@ -11,6 +11,13 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class ConvertToLearnosityCommand extends Command
 {
+    public function __construct(
+        protected ConvertToLearnosityService $convertToLearnosityService,
+        string $name = null,
+    ) {
+        parent::__construct($name);
+    }
+
     protected function configure(): void
     {
         $this
@@ -73,27 +80,31 @@ class ConvertToLearnosityCommand extends Command
     /**
      * @throws MappingException
      */
-    protected function execute(InputInterface $input, OutputInterface $output): int
-    {
-        $validationErrors = [];
-        $inputPath = $input->getOption('input');
-        $outputPath = $input->getOption('output');
-        $organisationId = $input->getOption('organisation_id');
-        $itemReferenceSource = $input->getOption('item-reference-source');
-        $isConvertPassageContent = strtoupper($input->getOption('passage-only-items'));
-        $isSingleItemConvert = strtoupper($input->getOption('single-item'));
+    protected function execute(
+        InputInterface $input,
+        OutputInterface $output
+    ): int {
+        $validationErrors        = [];
+        $inputPath               = $input->getOption('input');
+        $outputPath              = $input->getOption('output');
+        $organisationId          = $input->getOption('organisation_id');
+        $itemReferenceSource     = $input->getOption('item-reference-source');
+        $isConvertPassageContent = in_array(strtoupper($input->getOption('passage-only-items')), ['Y', 'YES']);
+        $isSingleItemConvert     = in_array(strtoupper($input->getOption('single-item')), ['Y', 'YES']);
 
-        // Validate the required options
+        // Validate the required options.
         if (empty($inputPath) || empty($outputPath)) {
             $validationErrors[] = "The <info>input</info> and <info>output</info> options are required. Eg:";
         }
 
-        // Make sure we can read the input folder, and write to the output folder
-        if (!empty($inputPath) && !is_dir($inputPath) && $isSingleItemConvert != 'Y' && $isSingleItemConvert != 'YES') {
+        // Make sure we can read the input folder, and write to the output
+        // folder.
+        if (!empty($inputPath) && !is_dir($inputPath) && $isSingleItemConvert) {
             $output->writeln([
                 "Input path isn't a directory (<info>$inputPath</info>)"
             ]);
         }
+
         if (!empty($outputPath) && !is_dir($outputPath)) {
             $output->writeln([
                 "Output path isn't a directory (<info>$outputPath</info>)"
@@ -108,28 +119,16 @@ class ConvertToLearnosityCommand extends Command
             $validationErrors[] = "The <info>organisation_id</info> option is required for asset uploads.";
         }
 
-        $requiredValuesForPassageConversion = ['Yes or Y', 'No or N'];
-        if ($isConvertPassageContent != 'Y' && $isConvertPassageContent != 'YES' && $isConvertPassageContent != 'N' && $isConvertPassageContent != 'NO') {
-            $validationErrors[] = "The <info>passage-only-items</info> must be one of the following values: " . join(
-                    ', ', $requiredValuesForPassageConversion
-                );
-        }
-
-        $requiredValuesForSingleItemConversion = ['Yes or Y', 'No or N'];
-        if ($isSingleItemConvert != 'Y' && $isSingleItemConvert != 'YES' && $isSingleItemConvert != 'N' && $isSingleItemConvert != 'NO') {
-            $validationErrors[] = "The <info>single-item</info> must be one of the following values: " . join(
-                    ', ', $requiredValuesForSingleItemConversion
-                );
-        }
-
         $validItemReferenceSources = ['item', 'metadata', 'filename', 'resource'];
-        if (isset($itemReferenceSource) && !in_array($itemReferenceSource, $validItemReferenceSources)) {
-            $validationErrors[] = "The <info>item-reference-source</info> must be one of the following values: " . join(
-                    ', ', $validItemReferenceSources
-                );
+
+        if (isset($itemReferenceSource)
+            && !in_array($itemReferenceSource, $validItemReferenceSources)
+        ) {
+            $validationErrors[] = "The <info>item-reference-source</info> must be one of the following values: "
+                . implode(', ', $validItemReferenceSources);
         }
 
-        if (!empty($validationErrors)) {
+        if (! empty($validationErrors)) {
             $output->writeln([
                 '',
                 "<error>Validation error</error>"
@@ -143,30 +142,25 @@ class ConvertToLearnosityCommand extends Command
                 "  <info>mo convert:to:learnosity --input /path/to/qti --output /path/to/save/folder --organisation_id [integer]</info>"
             ]);
 
-            return Command::SUCCESS;
+            return Command::FAILURE;
         } else {
-            $Convert = ConvertToLearnosityService::initClass($inputPath, $outputPath, $output, $organisationId, $isConvertPassageContent, $isSingleItemConvert);
+            $identifierOptions = match ($itemReferenceSource) {
+                'item' => [false, false, false, true],
+                'filename' => [false, false, true, false],
+                'resource' => [false, true, false, false],
+                default => [true, false, false, true],
+            };
 
-            $Convert->useMetadataIdentifier(true);
-            $Convert->useResourceIdentifier(false);
-            $Convert->useFileNameAsIdentifier(false);
-            $Convert->useItemIdentifier(true);
-            if ($itemReferenceSource === 'item') {
-                $Convert->useMetadataIdentifier(false);
-                $Convert->useResourceIdentifier(false);
-                $Convert->useFileNameAsIdentifier(false);
-                $Convert->useItemIdentifier(true);
-            } elseif ($itemReferenceSource === 'filename') {
-                $Convert->useMetadataIdentifier(false);
-                $Convert->useResourceIdentifier(false);
-                $Convert->useFileNameAsIdentifier(true);
-            } elseif ($itemReferenceSource === 'resource') {
-                $Convert->useMetadataIdentifier(false);
-                $Convert->useResourceIdentifier(true);
-                $Convert->useFileNameAsIdentifier(false);
-            }
+            $result = $this->convertToLearnosityService->convert(
+                $inputPath,
+                $outputPath,
+                $output,
+                $organisationId,
+                $isConvertPassageContent,
+                $isSingleItemConvert,
+                ...$identifierOptions,
+            );
 
-            $result = $Convert->process();
             if ($result['status'] === false) {
                 $output->writeln('<error>Error running job</error>');
                 foreach ($result['message'] as $m) {
@@ -174,7 +168,7 @@ class ConvertToLearnosityCommand extends Command
                 }
             }
 
-            return Command::FAILURE;
+            return Command::SUCCESS;
         }
     }
 }
