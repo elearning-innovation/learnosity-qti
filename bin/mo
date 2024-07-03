@@ -17,7 +17,7 @@ foreach (
 
 unset($file);
 
-if (!defined('AUTOLOAD_PATH')) {
+if (! defined('AUTOLOAD_PATH')) {
     fwrite(STDERR, 'Cannot find the Composer autoloader' . PHP_EOL . PHP_EOL);
     die();
 }
@@ -28,29 +28,21 @@ use LearnosityQti\Commands\ConvertToLearnosityCommand;
 use LearnosityQti\Commands\ConvertToQtiCommand;
 use LearnosityQti\Commands\DefaultCommand;
 use LearnosityQti\Commands\ListCommand;
+use LearnosityQti\Services\ConvertToLearnosityService;
 use Symfony\Component\Console\Application;
 
-if (!ini_get('date.timezone')) {
+if (! ini_get('date.timezone')) {
     ini_set('date.timezone', 'UTC');
 }
 
 $application = new Application();
 
-/*
-|--------------------------------------------------------------------------
-| Define the application commands
-|--------------------------------------------------------------------------
-|
-| Setup all the available commands for mo
-|
- */
 $availableCommands = [
     'list',
     'convert:to:learnosity',
     'convert:to:qti'
 ];
 
-// Default to `DefaultCommand`
 $commandToRun = null;
 
 foreach ($argv as $i => $input) {
@@ -62,19 +54,12 @@ foreach ($argv as $i => $input) {
     }
 }
 
-switch ($commandToRun) {
-    case 'list':
-        $application->add(new ListCommand());
-        break;
-    case 'convert:to:learnosity':
-        $application->add(new ConvertToLearnosityCommand());
-        break;
-    case 'convert:to:qti':
-        $application->add(new ConvertToQtiCommand());
-        break;
-    default:
-        $application->add(new DefaultCommand());
-}
+$application->add(match ($commandToRun) {
+    'list'                  => new ListCommand(),
+    'convert:to:learnosity' => new ConvertToLearnosityCommand(new ConvertToLearnosityService()),
+    'convert:to:qti'        => new ConvertToQtiCommand(),
+    default                 => new DefaultCommand(),
+});
 
 $application->setDefaultCommand('mo');
 $application->run();

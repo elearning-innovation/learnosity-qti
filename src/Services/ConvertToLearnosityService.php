@@ -83,15 +83,15 @@ final class ConvertToLearnosityService
         bool $useItemIdentifier,
     ): array
     {
+        $this->inputPath               = $inputPath;
+        $this->outputPath              = $outputPath;
+        $this->output                  = $output;
+        $this->organisationId          = $organisationId;
         $this->isConvertPassageContent = $isConvertPassageContent;
-        $this->inputPath = $inputPath;
-        $this->outputPath = $outputPath;
-        $this->output = $output;
-        $this->organisationId = $organisationId;
-        $this->useMetadataIdentifier = $useMetadataIdentifier;
-        $this->useResourceIdentifier = $useResourceIdentifier;
+        $this->useMetadataIdentifier   = $useMetadataIdentifier;
+        $this->useResourceIdentifier   = $useResourceIdentifier;
         $this->useFileNameAsIdentifier = $useFileNameAsIdentifier;
-        $this->useItemIdentifier = $useItemIdentifier;
+        $this->useItemIdentifier       = $useItemIdentifier;
 
         if (! $isSingleItemConvert) {
             $errors = $this->validate();
@@ -105,9 +105,11 @@ final class ConvertToLearnosityService
         }
 
         // Setup output (or -o) subdirectories
-        FileSystemHelper::createDirIfNotExists($outputPath . DIRECTORY_SEPARATOR . self::PATH_FINAL);
-        FileSystemHelper::createDirIfNotExists($outputPath . DIRECTORY_SEPARATOR . self::PATH_LOG);
-        FileSystemHelper::createDirIfNotExists($outputPath . DIRECTORY_SEPARATOR . self::PATH_RAW);
+        array_map(
+            static fn (string $path)
+                => FileSystemHelper::createDirIfNotExists($outputPath . DIRECTORY_SEPARATOR . $path),
+            [self::PATH_FINAL, self::PATH_LOG, self::PATH_RAW],
+        );
 
         if ($isSingleItemConvert) {
             $resultSingleFile = [];
@@ -160,7 +162,7 @@ final class ConvertToLearnosityService
                 unset($convertedContent['rubric']);
             }
 
-            if (!empty($convertedContent)) {
+            if (! empty($convertedContent)) {
                 $convertedContent = $this->removeUnusedDataFromItem(
                     $convertedContent,
                 );
@@ -169,7 +171,7 @@ final class ConvertToLearnosityService
                 $resultSingleFile['qtiitems'][$convertedContentKey] = $convertedContent;
             }
 
-            if (!empty($scoringRubric)) {
+            if (! empty($scoringRubric)) {
                 $scoringRubric = $this->removeUnusedDataFromItem($scoringRubric);
                 $scoringRubricKey = basename($currentDir) . '/' . $scoringRubric['item']['reference'];
                 $resultSingleFile['qtiitems'][$scoringRubricKey] = $scoringRubric;
@@ -335,7 +337,7 @@ final class ConvertToLearnosityService
                 // The QTI package requires that `identifier` be on the
                 // <assessmentItem> node. Check that it's there, or add it from
                 // the location we retrieved it from.
-                if (!empty($itemReference)) {
+                if (! empty($itemReference)) {
                     $assessmentItemContents = $this->checkAssessmentItemIdentifier(
                         $assessmentItemContents,
                         $itemReference,
@@ -405,7 +407,7 @@ final class ConvertToLearnosityService
                     $convertedContent,
                 );
 
-                if (!empty($convertedContent)) {
+                if (! empty($convertedContent)) {
                     $convertedContentKey = basename($relativeDir)
                         . '/'
                         . $resourceHref;
@@ -414,7 +416,7 @@ final class ConvertToLearnosityService
 
                 $scoringRubric = $this->removeUnusedDataFromItem($scoringRubric);
 
-                if (!empty($scoringRubric)) {
+                if (! empty($scoringRubric)) {
                     $scoringRubricKey = basename($relativeDir)
                         . '/'
                         . $scoringRubric['item']['reference'];
@@ -700,7 +702,7 @@ final class ConvertToLearnosityService
                 $search,
                 )->item(0)->textContent . "\n";
 
-            if (!empty(trim($tagValues))) {
+            if (! empty(trim($tagValues))) {
                 $tagValuesArray = explode(',', rtrim($tagValues));
                 $itemTagsArray[rtrim($tagName)] = $tagValuesArray;
             }
@@ -959,7 +961,7 @@ final class ConvertToLearnosityService
                 // attribute.
                 foreach ($node->attributes as $attribute) {
                     if ($attribute->name === 'identifier') {
-                        if (!empty($attribute->value)) {
+                        if (! empty($attribute->value)) {
                             $identifier = $attribute->value;
                         }
                     }
@@ -1029,8 +1031,6 @@ final class ConvertToLearnosityService
 
         $xmlDocument = new XmlDocument();
         $xmlDocument->loadFromString($xmlString);
-        // $xmlDocument->getDomDocument()->documentURI = $file->getPathname();
-        // $xmlDocument->xInclude();
 
         /** @var AssessmentItem $assessmentItem */
         $assessmentItem = $xmlDocument->getDocumentComponent();
@@ -1105,6 +1105,7 @@ final class ConvertToLearnosityService
         if ($this->dryRun) {
             return;
         }
+
         $manifest['info']['question_types'] = array_values(array_unique($manifest['info']['question_types']));
         $manifest['imported_rubrics'] = array_values(array_unique($manifest['imported_rubrics']));
         $manifest['imported_items'] = array_values(array_unique($manifest['imported_items']));
@@ -1213,7 +1214,7 @@ final class ConvertToLearnosityService
             $itemReference = $itemResult['item']['reference'];
             $manifest['imported_items'][] = $itemReference;
 
-            if (!empty($itemResult['rubric'])) {
+            if (! empty($itemResult['rubric'])) {
                 $rubricReference = $itemResult['rubric']['reference'];
                 $manifest['imported_rubrics'][] = $rubricReference;
             }
@@ -1235,7 +1236,7 @@ final class ConvertToLearnosityService
                 $manifest['info']['question_types'][] = $question['type'];
             }
             // Store assumptions
-            if (!empty($itemResult['assumptions'])) {
+            if (! empty($itemResult['assumptions'])) {
                 $manifest['warnings'][$itemReference] = array_unique($itemResult['assumptions']);
             }
         }
