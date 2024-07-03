@@ -144,11 +144,17 @@ class ConvertToLearnosityCommand extends Command
 
             return Command::FAILURE;
         } else {
+            /**
+             * @var array $identifierOptions useMetadataIdentifier,
+             *                               useResourceIdentifier,
+             *                               useFileNameAsIdentifier,
+             *                               useItemIdentifier.
+             */
             $identifierOptions = match ($itemReferenceSource) {
-                'item' => [false, false, false, true],
+                'item'     => [false, false, false, true],
                 'filename' => [false, false, true, false],
                 'resource' => [false, true, false, false],
-                default => [true, false, false, true],
+                default    => [true, false, false, true],
             };
 
             $result = $this->convertToLearnosityService->convert(
@@ -166,6 +172,8 @@ class ConvertToLearnosityCommand extends Command
                 foreach ($result['message'] as $m) {
                     $output->writeln($m);
                 }
+
+                return Command::FAILURE;
             }
 
             return Command::SUCCESS;

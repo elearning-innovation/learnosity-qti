@@ -1,11 +1,5 @@
 <?php
 
-/** 
- * @noinspection PhpUnusedPrivateMethodInspection
- * @noinspection DuplicatedCode
- * @noinspection SpellCheckingInspection
- */
-
 namespace LearnosityQti\Services;
 
 use DOMDocument;
@@ -69,8 +63,7 @@ final class ConvertToLearnosityService
 
     private AssetsFixer $assetsFixer;
 
-    public function __construct(
-    ) {
+    public function __construct() {
         $this->assetsFixer = new AssetsFixer();
     }
 
