@@ -1153,18 +1153,6 @@ final class ConvertToLearnosityService
             . ".json</info>\n",
         );
 
-        ($this->logger)(
-            '<info>'
-            . self::INFO_OUTPUT_PREFIX
-            . 'Writing manifest: '
-            . $this->outputPath
-            . DIRECTORY_SEPARATOR
-            . self::PATH_LOG
-            . DIRECTORY_SEPARATOR
-            . $manifestFileBasename
-            . ".json</info>\n",
-        );
-
         $this->writeJsonToFile(
             $manifest,
             $this->outputPath
