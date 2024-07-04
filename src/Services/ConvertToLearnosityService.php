@@ -315,8 +315,6 @@ final class ConvertToLearnosityService
                 . "Processing manifest file: $relativePath </info>"
             );
 
-            ($this->logger)("Processing manifest file: $relativePath");
-
             // build the DOMDocument object
             $manifestDoc = new DOMDocument();
 
