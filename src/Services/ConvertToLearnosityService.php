@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LearnosityQti\Services;
 
+use Closure;
 use DOMDocument;
 use DOMNode;
 use DOMXPath;
@@ -65,6 +66,7 @@ final class ConvertToLearnosityService
     private bool $useItemIdentifier = false;
 
     private AssetsFixer $assetsFixer;
+    private ?Closure $logger;
 
     public function __construct() {
         $this->assetsFixer = new AssetsFixer();
@@ -84,6 +86,7 @@ final class ConvertToLearnosityService
         bool $useResourceIdentifier,
         bool $useFileNameAsIdentifier,
         bool $useItemIdentifier,
+        ?Closure $logger = null,
     ): array
     {
         $this->inputPath               = $inputPath;
@@ -95,6 +98,7 @@ final class ConvertToLearnosityService
         $this->useResourceIdentifier   = $useResourceIdentifier;
         $this->useFileNameAsIdentifier = $useFileNameAsIdentifier;
         $this->useItemIdentifier       = $useItemIdentifier;
+        $this->logger                  = $logger ?? function ($message) {return;};
 
         if (! $isSingleItemConvert) {
             $errors = $this->validate();
@@ -110,7 +114,7 @@ final class ConvertToLearnosityService
         // Setup output (or -o) subdirectories
         array_map(
             static fn (string $path)
-                => FileSystemHelper::createDirIfNotExists($outputPath . DIRECTORY_SEPARATOR . $path),
+            => FileSystemHelper::createDirIfNotExists($outputPath . DIRECTORY_SEPARATOR . $path),
             [self::PATH_FINAL, self::PATH_LOG, self::PATH_RAW],
         );
 
@@ -182,10 +186,10 @@ final class ConvertToLearnosityService
             $this->persistResultsFile(
                 $resultSingleFile,
                 realpath($outputPath)
-                    . DIRECTORY_SEPARATOR
-                    . self::PATH_RAW
-                    . DIRECTORY_SEPARATOR
-                    . $dirName,
+                . DIRECTORY_SEPARATOR
+                . self::PATH_RAW
+                . DIRECTORY_SEPARATOR
+                . $dirName,
             );
         } else {
             $this->parseContentPackage();
@@ -196,12 +200,12 @@ final class ConvertToLearnosityService
 
         $itemLayout->execute(
             $outputPath
-                . DIRECTORY_SEPARATOR
-                . self::PATH_RAW
-                . DIRECTORY_SEPARATOR,
+            . DIRECTORY_SEPARATOR
+            . self::PATH_RAW
+            . DIRECTORY_SEPARATOR,
             $outputPath
-                . DIRECTORY_SEPARATOR
-                . self::PATH_FINAL,
+            . DIRECTORY_SEPARATOR
+            . self::PATH_FINAL,
             $this->output,
         );
 
@@ -293,15 +297,15 @@ final class ConvertToLearnosityService
 
             $relativeDir = rtrim(
                 $relativeSourceDirectoryPath
-                    . DIRECTORY_SEPARATOR
-                    . $manifestFile->getRelativePath(),
+                . DIRECTORY_SEPARATOR
+                . $manifestFile->getRelativePath(),
                 DIRECTORY_SEPARATOR,
             );
 
             $relativePath = rtrim(
                 $relativeSourceDirectoryPath
-                    . DIRECTORY_SEPARATOR
-                    . $manifestFile->getRelativePathname(),
+                . DIRECTORY_SEPARATOR
+                . $manifestFile->getRelativePathname(),
                 DIRECTORY_SEPARATOR,
             );
 
@@ -310,6 +314,9 @@ final class ConvertToLearnosityService
                 . self::INFO_OUTPUT_PREFIX
                 . "Processing manifest file: $relativePath </info>"
             );
+            $this->logger("<info>"
+                . self::INFO_OUTPUT_PREFIX
+                . "Processing manifest file: $relativePath </info>");
 
             // build the DOMDocument object
             $manifestDoc = new DOMDocument();
@@ -364,6 +371,9 @@ final class ConvertToLearnosityService
                 $metadata['organisation_id'] = $this->organisationId;
 
                 $this->output->writeln(
+                    "<comment>Converting assessment item $itemReference: $relativeDir/$resourceHref</comment>",
+                );
+                $this->logger(
                     "<comment>Converting assessment item $itemReference: $relativeDir/$resourceHref</comment>",
                 );
 
@@ -696,13 +706,13 @@ final class ConvertToLearnosityService
 
         foreach ($searchResult as $search) {
             $tagName = $xpath->query(
-                './/lom:source/lom:string',
-                $search,
+                    './/lom:source/lom:string',
+                    $search,
                 )->item(0)->textContent . "\n";
 
             $tagValues = $xpath->query(
-                './/lom:taxon/lom:entry/lom:string',
-                $search,
+                    './/lom:taxon/lom:entry/lom:string',
+                    $search,
                 )->item(0)->textContent . "\n";
 
             if (! empty(trim($tagValues))) {
@@ -1064,10 +1074,10 @@ final class ConvertToLearnosityService
 
         $xpath = $this->getXPathForQtiDocument($resource->ownerDocument);
         $pointValueEntries = (
-            $xpath->query(
-                './qti:metadata/lom:lom/lom:classification/lom:taxonPath/lom:source/lom:string[text() = \'cf$Point Value\']/../../lom:taxon/lom:entry',
-                $resource,
-            )
+        $xpath->query(
+            './qti:metadata/lom:lom/lom:classification/lom:taxonPath/lom:source/lom:string[text() = \'cf$Point Value\']/../../lom:taxon/lom:entry',
+            $resource,
+        )
         );
 
         if ($pointValueEntries->length > 0) {
@@ -1137,15 +1147,26 @@ final class ConvertToLearnosityService
             . $manifestFileBasename
             . ".json</info>\n",
         );
+        $this->logger(
+            '<info>'
+            . self::INFO_OUTPUT_PREFIX
+            . 'Writing manifest: '
+            . $this->outputPath
+            . DIRECTORY_SEPARATOR
+            . self::PATH_LOG
+            . DIRECTORY_SEPARATOR
+            . $manifestFileBasename
+            . ".json</info>\n",
+        );
 
         $this->writeJsonToFile(
             $manifest,
             $this->outputPath
-                . DIRECTORY_SEPARATOR
-                . self::PATH_LOG
-                . DIRECTORY_SEPARATOR
-                . $manifestFileBasename
-                . '.json',
+            . DIRECTORY_SEPARATOR
+            . self::PATH_LOG
+            . DIRECTORY_SEPARATOR
+            . $manifestFileBasename
+            . '.json',
         );
     }
 
