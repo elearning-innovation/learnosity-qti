@@ -315,9 +315,7 @@ final class ConvertToLearnosityService
                 . "Processing manifest file: $relativePath </info>"
             );
 
-            ($this->logger)("<info>"
-                . self::INFO_OUTPUT_PREFIX
-                . "Processing manifest file: $relativePath </info>");
+            ($this->logger)("Processing manifest file: $relativePath");
 
             // build the DOMDocument object
             $manifestDoc = new DOMDocument();
@@ -325,6 +323,9 @@ final class ConvertToLearnosityService
             $manifestDoc->load($fullFilePath);
 
             $itemResources = $this->getItemResourcesByHrefFromDocument($manifestDoc);
+
+            $resourcesTotal = count($itemResources);
+            $resourceCurrent = 0;
 
             foreach ($itemResources as $resource) {
                 $resourceHref = $resource['href'];
@@ -376,7 +377,7 @@ final class ConvertToLearnosityService
                 );
 
                 ($this->logger)(
-                    "<comment>Converting assessment item $itemReference: $relativeDir/$resourceHref</comment>",
+                    "Converting assessment items ($resourceCurrent / $resourcesTotal)...",
                 );
 
                 $convertedContent = $this->convertAssessmentItemInFile(
