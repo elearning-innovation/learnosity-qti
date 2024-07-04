@@ -377,7 +377,11 @@ final class ConvertToLearnosityService
                 );
 
                 ($this->logger)(
-                    "Converting assessment items (++$resourceCurrent / $resourcesTotal)...",
+                    'Converting assessment items ('
+                    . ++$resourceCurrent
+                    . ' / '
+                    . $resourcesTotal
+                    . ')...',
                 );
 
                 $convertedContent = $this->convertAssessmentItemInFile(
