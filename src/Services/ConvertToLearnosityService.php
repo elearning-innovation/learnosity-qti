@@ -314,7 +314,8 @@ final class ConvertToLearnosityService
                 . self::INFO_OUTPUT_PREFIX
                 . "Processing manifest file: $relativePath </info>"
             );
-            $this->logger("<info>"
+
+            ($this->logger)("<info>"
                 . self::INFO_OUTPUT_PREFIX
                 . "Processing manifest file: $relativePath </info>");
 
@@ -373,7 +374,8 @@ final class ConvertToLearnosityService
                 $this->output->writeln(
                     "<comment>Converting assessment item $itemReference: $relativeDir/$resourceHref</comment>",
                 );
-                $this->logger(
+
+                ($this->logger)(
                     "<comment>Converting assessment item $itemReference: $relativeDir/$resourceHref</comment>",
                 );
 
@@ -1147,7 +1149,8 @@ final class ConvertToLearnosityService
             . $manifestFileBasename
             . ".json</info>\n",
         );
-        $this->logger(
+
+        ($this->logger)(
             '<info>'
             . self::INFO_OUTPUT_PREFIX
             . 'Writing manifest: '
